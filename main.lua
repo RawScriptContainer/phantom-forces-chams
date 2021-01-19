@@ -76,6 +76,21 @@ characterAdded:Connect(function(player, character)
     local maid = playerMaids[player]
     local chams = {}
 
+    local label = Drawing.new('Text')
+    label.Text = player.Name;
+    label.Size = 18
+    label.Outline = true;
+    label.Center = true;
+    label.Color = Color3.new(1, 1, 1)
+
+    if Drawing.Fonts then
+        label.Font = Drawing.Fonts.Monospace;
+    end
+    
+    label.Transparency = 1;
+    label.Visible = false;
+
+    local head = character:WaitForChild('Head')
     local team = player.Team
     local isSameTeam = (client.Team == team);
     local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
@@ -84,6 +99,7 @@ characterAdded:Connect(function(player, character)
     if (not library.flags.showTeam) and isSameTeam then
         isVisible = false;
     end
+
 
     for _, part in next, character:GetChildren() do
         if part:IsA('BasePart') and part.Transparency ~= 1 then
@@ -110,11 +126,25 @@ characterAdded:Connect(function(player, character)
         end
     end))
 
-    maid:GiveTask(colorChanged:Connect(function()
-        local team = player.Team
-        local isSameTeam = (client.Team == team);
+    maid:GiveTask(runService.Heartbeat:connect(function()
+        local isVisible = library.flags.showNames
+        if (not library.flags.showTeam) and isSameTeam then
+            isVisible = false;
+        end
 
-        local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
+        if isVisible and head then
+            local vector, visible = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
+            if visible then
+                label.Position = Vector2.new(vector.X, vector.Y - 20)
+                label.Visible = true;
+                return;
+            end
+        end
+
+        label.Visible = false;
+    end))
+
+    maid:GiveTask(colorChanged:Connect(function()
         for _, part in next, chams do
             part.Color3 = (color or player.TeamColor.Color)
         end
@@ -122,10 +152,10 @@ characterAdded:Connect(function(player, character)
 
     maid:GiveTask(teamStateChanged:Connect(function(state) 
         -- recalculating for if localplayer changes team :D
-        local team = player.Team
-        local isSameTeam = (client.Team == team);
-        local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
-
+        team = player.Team
+        isSameTeam = (client.Team == team);
+        color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
+    
         local isVisible = library.flags.chams
         if (not library.flags.showTeam) and isSameTeam then
             isVisible = false;
@@ -143,12 +173,6 @@ characterAdded:Connect(function(player, character)
         end
     end))
 
-    maid:GiveTask(function()
-        for _, part in next, chams do
-            part:Destroy()
-        end
-    end)
-
     maid:GiveTask(player:GetPropertyChangedSignal('Team'):connect(function()
         teamStateChanged:Fire(library.flags.showTeams)
     end))
@@ -158,6 +182,19 @@ characterAdded:Connect(function(player, character)
             maid:DoCleaning()
         end
     end))
+
+    maid:GiveTask(function()
+        for i = #chams, 1, -1 do
+            local part = table.remove(chams, i)
+            if typeof(part) == 'Instance' then
+                part:Destroy()
+            end
+        end
+
+        label.Visible = false;
+        label:Remove()
+        label = nil;
+    end)
 end)
 
 for _, player in next, players:GetPlayers() do
@@ -224,54 +261,62 @@ client:GetPropertyChangedSignal('Team'):connect(function()
 end)
 
 local window = library:CreateWindow('Phantom Forces');
+local folder = window:AddFolder('Toggles') do
+    folder:AddToggle({
+        text = 'Names', 
+        flag = 'showNames', 
+    })
 
-window:AddToggle({
-    text = 'Chams', 
-    flag = 'chams', 
-    callback = function(state)
-        chamStateChanged:Fire(state)
-    end
-})
+    folder:AddToggle({
+        text = 'Chams', 
+        flag = 'chams', 
+        callback = function(state)
+            chamStateChanged:Fire(state)
+        end
+    })
 
-window:AddToggle({
-    text = 'Show Teammates',
-    flag = 'showTeam',
-    callback = function(state)
-        teamStateChanged:Fire(state)
-    end,
-})
+    folder:AddToggle({
+        text = 'Show Teammates',
+        flag = 'showTeam',
+        callback = function(state)
+            teamStateChanged:Fire(state)
+        end,
+    })
 
-window:AddSlider({
-    text = 'Transparency',
-    flag = 'chamsTransparency',
-    min = 0,
-    max = 1,
-    float = 0.1,
-    callback = function(value)
-        transparencyChanged:Fire(value)
-    end
-})
+    folder:AddSlider({
+        text = 'Transparency',
+        flag = 'chamsTransparency',
+        min = 0,
+        max = 1,
+        float = 0.1,
+        callback = function(value)
+            transparencyChanged:Fire(value)
+        end
+    })
 
-window:AddColor({
-    text = 'Ally Color',
-    flag = 'allyColor',
-    color = Color3.fromRGB(0, 255, 140),
-    callback = function(color)
-        colorChanged:Fire()
-    end,
-})
+    folder:AddColor({
+        text = 'Ally Color',
+        flag = 'allyColor',
+        color = Color3.fromRGB(0, 255, 140),
+        callback = function(color)
+            colorChanged:Fire()
+        end,
+    })
 
-window:AddColor({
-    text = 'Enemy Color',
-    flag = 'enemyColor',
-    color = Color3.fromRGB(255, 50, 50),
-    callback = function(color)
-        colorChanged:Fire()
-    end,
-})
+    folder:AddColor({
+        text = 'Enemy Color',
+        flag = 'enemyColor',
+        color = Color3.fromRGB(255, 50, 50),
+        callback = function(color)
+            colorChanged:Fire()
+        end,
+    })
+end
 
-window:AddLabel({text = 'Credits'})
-window:AddLabel({text = 'Scripting: wally'})
-window:AddLabel({text = 'Interface - Jan'})
-window:AddLabel({text = 'Libraries - Quenty'})
+local folder = window:AddFolder('Credits') do
+    folder:AddLabel({text = 'Scripting: wally'})
+    folder:AddLabel({text = 'Interface - Jan'})
+    folder:AddLabel({text = 'Libraries - Quenty'})
+end
+
 library:Init()
