@@ -1,4 +1,4 @@
-if (not (syn and syn.protect_gui) or get_hidden_gui) then
+if (not (syn and syn.protect_gui)) or (not get_hidden_gui) then
     return
 end
 
