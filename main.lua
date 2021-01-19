@@ -70,7 +70,7 @@ local characterAdded = signal.new()
 local transparencyChanged = signal.new();
 local chamStateChanged = signal.new();
 local teamStateChanged = signal.new();
-
+local colorChanged = signal.new();
 
 characterAdded:Connect(function(player, character) 
     local maid = playerMaids[player]
@@ -78,6 +78,7 @@ characterAdded:Connect(function(player, character)
 
     local team = player.Team
     local isSameTeam = (client.Team == team);
+    local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
 
     local isVisible = library.flags.chams
     if (not library.flags.showTeam) and isSameTeam then
@@ -91,7 +92,7 @@ characterAdded:Connect(function(player, character)
                 Adornee = part,
 
                 AlwaysOnTop = true,
-                Color3 = player.TeamColor.Color;
+                Color3 = (color or player.TeamColor.Color),
                 Size = (part.Size + Vector3.new(0.5, 0.5, 0.5)),
                 Transparency = (library.flags.chamsTransparency or 0),
                 Visible = isVisible,
@@ -109,10 +110,21 @@ characterAdded:Connect(function(player, character)
         end
     end))
 
+    maid:GiveTask(colorChanged:Connect(function()
+        local team = player.Team
+        local isSameTeam = (client.Team == team);
+
+        local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
+        for _, part in next, chams do
+            part.Color3 = (color or player.TeamColor.Color)
+        end
+    end))
+
     maid:GiveTask(teamStateChanged:Connect(function(state) 
         -- recalculating for if localplayer changes team :D
         local team = player.Team
         local isSameTeam = (client.Team == team);
+        local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
 
         local isVisible = library.flags.chams
         if (not library.flags.showTeam) and isSameTeam then
@@ -121,7 +133,7 @@ characterAdded:Connect(function(player, character)
 
         for _, part in next, chams do
             part.Visible = isVisible
-            part.Color3 = player.TeamColor.Color;
+            part.Color3 = (color or player.TeamColor.Color)
         end
     end))
 
@@ -172,22 +184,20 @@ for _, team in next, workspace.Players:GetChildren() do
 
         local player;
 
-        local start = tick();
         while true do
             runService.Heartbeat:wait()
             player = characterList[model]
             
             if player then break end
-            if (tick() - start) > 5 then break end
+            if (not model.Parent) then break end
         end
 
         if (not player) then return end
-
         characterAdded:Fire(player, model)
     end)
 
-    for _, child in next, team:GetChildren() do
-        if child == client.Character then
+    for _, model in next, team:GetChildren() do
+        if model == client.Character then
             continue
         end
 
@@ -200,11 +210,10 @@ for _, team in next, workspace.Players:GetChildren() do
                 player = characterList[model]
 
                 if player then break end
-                if (tick() - start) > 5 then break end
             end
               
             if (not player) then return end
-            characterAdded:Fire(player, child)
+            characterAdded:Fire(player, model)
         end)()
     end
 end
@@ -241,6 +250,24 @@ window:AddSlider({
     callback = function(value)
         transparencyChanged:Fire(value)
     end
+})
+
+window:AddColor({
+    text = 'Ally Color',
+    flag = 'allyColor',
+    color = Color3.fromRGB(0, 255, 140),
+    callback = function(color)
+        colorChanged:Fire()
+    end,
+})
+
+window:AddColor({
+    text = 'Enemy Color',
+    flag = 'enemyColor',
+    color = Color3.fromRGB(255, 50, 50),
+    callback = function(color)
+        colorChanged:Fire()
+    end,
 })
 
 window:AddLabel({text = 'Credits'})
