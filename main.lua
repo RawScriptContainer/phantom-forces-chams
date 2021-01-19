@@ -148,7 +148,7 @@ for _, team in next, workspace.Players:GetChildren() do
         local start = tick();
         while true do
             runService.Heartbeat:wait()
-            player = characterList[model]-- replication.getplayerhit(model:FindFirstChildOfClass('Part') or model)
+            player = characterList[model]
             
             if player then break end
             if (tick() - start) > 5 then break end
@@ -180,8 +180,8 @@ end
 
 local ui = material.Load({
     Title = 'Phantom Forces - Chams',
-    Style = 3,
-    SizeY = 175,
+    Style = 2,
+    SizeY = 150,
     Theme = 'Dark',
 })
 
