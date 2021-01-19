@@ -193,13 +193,17 @@ for _, team in next, workspace.Players:GetChildren() do
 
         coroutine.wrap(function()
             local player;
+
+            local start = tick();
             while true do
                 runService.Heartbeat:wait()
-                player = replication.getplayerhit(child:FindFirstChildOfClass('Part') or child)
-                
+                player = characterList[model]
+
                 if player then break end
+                if (tick() - start) > 5 then break end
             end
-    
+              
+            if (not player) then return end
             characterAdded:Fire(player, child)
         end)()
     end
@@ -233,7 +237,7 @@ window:AddSlider({
     flag = 'chamsTransparency',
     min = 0,
     max = 1,
-    float = 0.01,
+    float = 0.1,
     callback = function(value)
         transparencyChanged:Fire(value)
     end
