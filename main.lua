@@ -314,9 +314,10 @@ local folder = window:AddFolder('Toggles') do
 end
 
 local folder = window:AddFolder('Credits') do
-    folder:AddLabel({text = 'Scripting: wally'})
+    folder:AddLabel({text = 'Scripting - wally'})
     folder:AddLabel({text = 'Interface - Jan'})
     folder:AddLabel({text = 'Libraries - Quenty'})
+    folder:AddLabel({text = 'egg salad is rly fat'})
 end
 
 library:Init()
