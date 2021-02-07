@@ -6,17 +6,30 @@ local maid = loadstring(game:HttpGet('https://raw.githubusercontent.com/Quenty/N
 local signal = loadstring(game:HttpGet('https://raw.githubusercontent.com/Quenty/NevermoreEngine/version2/Modules/Shared/Events/Signal.lua'))()
 local library = loadstring(game:HttpGet('https://pastebin.com/raw/edJT9EGX'))()
 
-local replication; do
+local replication, camera, setlookvector; do
     for _, tbl in next, getgc(true) do
-        if type(tbl) ~= 'table' then continue end
+        if type(tbl) ~= 'table' then 
+            if type(tbl) == 'function' and getinfo(tbl).name == 'setlookvector' then
+                setlookvector = tbl;
+            end
+
+            continue 
+        end
+
 
         if rawget(tbl, 'removecharacterhash') then
             replication = tbl;
-            break
         end
+
+        if rawget(tbl, 'setmenufov') then
+            camera = tbl;
+        end
+
+
+        if (replication and camera) then break end
     end
 
-    if (not replication) then 
+    if (not replication) or (not camera) then 
         return
     end
 end
@@ -60,9 +73,13 @@ else
 end
 
 local playerMaids = {}
+local playerCharacters = {};
+
 local players = game:GetService('Players');
-local runService = game:GetService('RunService');
 local client = players.LocalPlayer;
+
+local userInputService = game:GetService('UserInputService')
+local runService = game:GetService("RunService")
 
 local characterList = getupvalue(replication.getplayerhit, 1)
 
@@ -91,9 +108,12 @@ characterAdded:Connect(function(player, character)
     label.Visible = false;
 
     local head = character:WaitForChild('Head')
+    local root = character:WaitForChild('HumanoidRootPart')
     local team = player.Team
     local isSameTeam = (client.Team == team);
     local color = (isSameTeam and library.flags.allyColor or library.flags.enemyColor)
+
+    playerCharacters[player] = character;
 
     local isVisible = library.flags.chams
     if (not library.flags.showTeam) and isSameTeam then
@@ -135,6 +155,15 @@ characterAdded:Connect(function(player, character)
         if isVisible and head then
             local vector, visible = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
             if visible then
+                local cRoot = client.Character and client.Character:FindFirstChild('Torso')
+
+                if cRoot and library.flags.showDistance then
+                    local distance = math.floor((root.Position - cRoot.Position).magnitude)
+                    label.Text = (player.Name .. '\n' .. distance .. 'm')
+                else
+                    label.Text = player.Name
+                end
+                
                 label.Position = Vector2.new(vector.X, vector.Y - 20)
                 label.Visible = true;
                 return;
@@ -177,13 +206,19 @@ characterAdded:Connect(function(player, character)
         teamStateChanged:Fire(library.flags.showTeams)
     end))
 
-    maid:GiveTask(character.AncestryChanged:connect(function(_, new)
-        if new == nil then
+    maid:GiveTask(character:GetPropertyChangedSignal('Parent'):connect(function()
+        if (not character.Parent) then
             maid:DoCleaning()
         end
     end))
 
     maid:GiveTask(function()
+        playerCharacters[player] = nil;
+        
+        if currentTarget then
+
+        end
+
         for i = #chams, 1, -1 do
             local part = table.remove(chams, i)
             if typeof(part) == 'Instance' then
@@ -260,11 +295,192 @@ client:GetPropertyChangedSignal('Team'):connect(function()
     teamStateChanged:Fire(library.flags.showTeams)
 end)
 
+--[[ aimbot ]] 
+local circle; do
+    -- i know some of this code is a bit ugly or inefficient but oh well
+
+    local partList = {
+        'Head', 
+        'Torso', 
+        'Left Arm', 
+        'Right Arm', 
+        'Left Leg', 
+        'Right Leg', 
+    }
+
+    circle = Drawing.new('Circle');
+    circle.Thickness = 2
+    circle.Transparency = 1;
+    circle.Visible = false;
+    circle.NumSides = 24;
+
+    local function selectAimbotTarget()
+        local found = nil;
+        local dist = math.huge;
+
+        local cursor = userInputService:GetMouseLocation()
+        local part = library.flags.aimPart or 'Head'
+        if (part == 'Random') then
+            part = partList[math.random(#partList)]
+        end
+
+        local cPos = circle.Position;
+        local cRad = circle.Radius;
+
+        for player, character in next, playerCharacters do
+            if player.Team == client.Team then continue end
+            if (not character:IsDescendantOf(workspace)) then continue end
+
+            local part = character:FindFirstChild(part)
+            if (not part) then continue end
+
+            local vector, visible = workspace.CurrentCamera:WorldToViewportPoint(part.Position)
+            if (not visible) then continue end
+
+            local v2 = Vector2.new(vector.X, vector.Y)
+            local mDist = math.floor((cursor - v2).magnitude) 
+
+            if library.flags.useFovCircle then
+                -- this for some reason works better than a magnitude check (probably some stupid circle math idk)
+
+                local left = (cPos.X - cRad)
+                local right = (cPos.X + cRad)
+                local top = (cPos.Y - cRad)
+                local bottom = (cPos.Y + cRad)
+
+                if not ((v2.X <= right and v2.X >= left) and (v2.Y <= bottom and v2.Y >= top)) then
+                    continue
+                end
+            end
+
+            if mDist < dist then
+                dist = mDist
+                final = part;
+            end
+        end
+
+        return final
+    end
+
+    local currentTarget;
+    runService.RenderStepped:connect(function()
+        circle.Position = userInputService:GetMouseLocation()
+    end)
+
+    runService.Heartbeat:connect(function()
+        if library.flags.aimbotEnabled and library.flags._holdingAimbotBind and client.Character then
+            if (not currentTarget) then
+                currentTarget = selectAimbotTarget()
+            elseif currentTarget and (not currentTarget.Parent) then
+                currentTarget = nil;
+                return
+            end
+
+            if (not currentTarget) or (not currentTarget:IsDescendantOf(workspace)) then return end
+
+            -- setlookvector(camera, camera.cframe:lerp(CFrame.lookAt(camera.cframe.p, currentTarget.Position), 1/sens).lookVector)
+
+            local cursor = userInputService:GetMouseLocation()
+            local position, visible = workspace.CurrentCamera:WorldToViewportPoint(currentTarget.Position)
+
+            if (not visible) then 
+                currentTarget = nil
+                return
+            end
+
+            local mPosition = Vector2.new(position.X, position.Y);
+            local relative = (mPosition - cursor)
+            
+            local sens = library.flags.aimbotSmoothing or 1
+            mousemoverel(relative.X/sens, relative.Y/sens)
+        end 
+    end)
+
+    userInputService.InputEnded:connect(function(key, gpe)
+        if (not library._aimbotBindOption) then return end
+        
+        local bind = library._aimbotBindOption.key 
+        if (key.UserInputType.Name == bind or key.KeyCode.Name == bind) then
+            currentTarget = nil;
+        end
+    end)
+end
+
 local window = library:CreateWindow('Phantom Forces');
-local folder = window:AddFolder('Toggles') do
+local folder = window:AddFolder('Aimbot') do
+
+    folder:AddToggle({
+        text = 'Enabled',
+        flag = 'aimbotEnabled',
+    })
+
+    folder:AddSlider({
+        text = 'Sensitivity',
+        flag = 'aimbotSmoothing',
+        min = 1, 
+        max = 10,
+        float = 0.1,
+    })
+
+    library._aimbotBindOption = folder:AddBind({
+        text = 'Keybind',
+        flag = 'aimbotBind',
+        key = Enum.UserInputType.MouseButton2,
+        hold = true,
+        callback = function(value)
+            library.flags._holdingAimbotBind = (not value)
+        end,
+    })
+
+    folder:AddList({
+        text = 'Aimbot part',
+        flag = 'aimPart',
+        values = {
+            'Head', 
+            'Torso', 
+            'Left Arm', 
+            'Right Arm', 
+            'Left Leg', 
+            'Right Leg', 
+            'Random',
+        }
+    })
+
+    folder:AddToggle({
+        text = 'FOV Circle',
+        flag = 'useFovCircle',
+        callback = function(state)
+            circle.Visible = state
+        end
+    })
+
+    folder:AddSlider({
+        text = 'Radius',
+        min = 1,
+        max = 100,
+        flag = 'fovCircleRadius',
+        callback = function(value)
+            circle.Radius = value
+        end,
+    })
+
+    folder:AddColor({
+        text = 'Color',
+        callback = function(color)
+            circle.Color = color;
+        end
+    })
+end
+
+local folder = window:AddFolder('Visuals') do
     folder:AddToggle({
         text = 'Names', 
         flag = 'showNames', 
+    })
+
+    folder:AddToggle({
+        text = 'Distance', 
+        flag = 'showDistance', 
     })
 
     folder:AddToggle({
